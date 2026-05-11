@@ -379,10 +379,14 @@ function reorderProduct(skuA, skuB) {
     }
 
     if (rowA !== -1 && rowB !== -1) {
-      const orderA = agingSheet.getRange(rowA, 1).getValue();
-      const orderB = agingSheet.getRange(rowB, 1).getValue();
-      agingSheet.getRange(rowA, 1).setValue(orderB);
-      agingSheet.getRange(rowB, 1).setValue(orderA);
+      // ดึงข้อมูลคอลัมน์ B, C, D (SKU, ชื่อสินค้า, ชีต)
+      const dataA = agingSheet.getRange(rowA, 2, 1, 3).getValues();
+      const dataB = agingSheet.getRange(rowB, 2, 1, 3).getValues();
+      
+      // สลับข้อมูลระหว่าง Row A และ Row B
+      agingSheet.getRange(rowA, 2, 1, 3).setValues(dataB);
+      agingSheet.getRange(rowB, 2, 1, 3).setValues(dataA);
+      
       return JSON.stringify({ success: true });
     }
 
