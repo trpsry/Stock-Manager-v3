@@ -1,0 +1,146 @@
+<!-- Tailwind 3 Play CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa',
+          500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a',
+        },
+      },
+      fontFamily: { sarabun: ['Sarabun', 'sans-serif'], },
+      boxShadow: { 'premium': '0 8px 30px rgb(0,0,0,0.04)', 'glass': '0 4px 30px rgba(0, 0, 0, 0.1)', },
+    }
+  }
+}
+</script>
+
+<style>
+  * { font-family: 'Sarabun', sans-serif; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background-color: #f8fafc; color: #0f172a; }
+  body { padding-bottom: env(safe-area-inset-bottom); display: flex; flex-direction: column; }
+  input, select, textarea { font-size: 16px !important; }
+
+  /* Custom Scrollbar */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Shimmer Animation */
+  .shimmer {
+    background: linear-gradient(90deg, #f1f5f9 25%, #f8fafc 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: shimmer-load 1.5s infinite linear;
+  }
+  @keyframes shimmer-load { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  #tabs-scroll {
+    scroll-padding-inline: 1.25rem;
+  }
+
+  .tab-btn {
+    position: relative;
+    min-height: 42px;
+    border: 1px solid rgba(203, 213, 225, 0.82);
+    background: rgba(255, 255, 255, 0.78);
+    color: #475569;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 4px 14px rgba(15,23,42,0.04);
+  }
+
+  .tab-btn:hover {
+    transform: translateY(-1px);
+    background: #ffffff;
+    color: #1e293b;
+    border-color: rgba(147, 197, 253, 0.9);
+  }
+
+  .tab-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14), inset 0 1px 0 rgba(255,255,255,0.75);
+  }
+
+  .tab-btn.active {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: white;
+    box-shadow: 0 12px 26px -14px rgba(37, 99, 235, 0.85);
+    border-color: rgba(37, 99, 235, 0.2);
+  }
+
+  .tab-priority {
+    padding-left: 1rem !important;
+    padding-right: 1.15rem !important;
+    background: #ffffff;
+    color: #0f172a;
+    border-color: rgba(37, 99, 235, 0.22);
+    box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.42), inset 0 1px 0 rgba(255,255,255,0.86);
+    font-weight: 800;
+  }
+
+  .tab-priority::before {
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.55rem;
+    border-radius: 9999px;
+    background: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    vertical-align: 0.08rem;
+  }
+
+  .tab-priority.tab-aging {
+    border-color: rgba(245, 158, 11, 0.32);
+  }
+
+  .tab-priority.tab-aging::before {
+    background: #f59e0b;
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.14);
+  }
+
+  .tab-priority.tab-products.active {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb);
+    box-shadow: 0 16px 32px -18px rgba(29, 78, 216, 0.95);
+  }
+
+  .tab-priority.tab-aging.active {
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+    border-color: rgba(37, 99, 235, 0.26);
+    box-shadow: 0 16px 32px -18px rgba(37, 99, 235, 0.95);
+  }
+
+  .tab-priority.active::before {
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.22);
+  }
+  
+  /* Highlight Flash Animation */
+  @keyframes highlight-flash {
+    0% { background-color: rgba(254, 240, 138, 0.6); transform: scale(1.02); }
+    100% { background-color: transparent; transform: scale(1); }
+  }
+  .highlight-product {
+    animation: highlight-flash 2.5s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 10;
+  }
+  
+  /* Subtab Button */
+  .subtab-btn.active {
+    background-color: #2563eb;
+    color: white;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  }
+
+  /* Timestamp Label */
+  .timestamp-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.025em;
+  }
+
+  /* Icon Button Active */
+  .icon-btn.active { background-color: #2563eb; color: white; border-color: #2563eb; }
+</style>
