@@ -4,7 +4,7 @@ var AGING_TAB    = 'Aging';
 
 var state = { 
   allData: {}, 
-  current: OVERVIEW_TAB, 
+  current: AGING_TAB,
   subTab: 'All',
   search: '',
   reorderMode: false,
@@ -384,6 +384,15 @@ function switchSubTab(name, btn) {
 
   document.getElementById('scroll-container').scrollTop = 0;
   renderList();
+}
+
+function syncActiveSubTab() {
+  var container = document.getElementById('subtabs-container');
+  if (!container) return;
+  var buttons = container.querySelectorAll('.subtab-btn');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle('active', buttons[i].textContent.trim() === state.subTab);
+  }
 }
 
 var _searchTimer = null;
@@ -854,8 +863,9 @@ function submitAddProduct() {
   var size = document.getElementById('add-size').value.trim();
   var sheet = document.getElementById('add-sheet').value;
   var btn = document.getElementById('submit-add-btn');
+  var isNewSheet = sheet === '__NEW__';
 
-  if (sheet === '__NEW__') {
+  if (isNewSheet) {
     sheet = document.getElementById('add-new-sheet').value.trim();
     if (!sheet) { showToast('กรุณากรอกชื่อหมวดหมู่ใหม่', true); return; }
   }
@@ -872,6 +882,18 @@ function submitAddProduct() {
       if (res.success) {
         closeAddProductModal();
         showToast('เพิ่มสินค้าสำเร็จ ✓');
+        if (isNewSheet) {
+          state.current = AGING_TAB;
+          state.subTab = sheet;
+          document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+          var updateTab = document.getElementById('tab-update');
+          if (updateTab) updateTab.classList.add('active');
+          var subContainer = document.getElementById('subtabs-container');
+          if (subContainer) {
+            subContainer.classList.remove('hidden');
+            subContainer.classList.add('flex');
+          }
+        }
         loadAllData(); // Reload ข้อมูลใหม่หมดเพื่อดึงลำดับที่ถูกต้อง
       } else {
         showToast('ผิดพลาด: ' + res.error, true);
@@ -949,9 +971,11 @@ function renderSubTabs() {
   var el = document.getElementById('sheet-subtabs');
   if (!el) return;
   el.innerHTML = (state.sheetNames || []).map(function(name) {
-    return '<button class="subtab-btn px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-500 active:scale-95 transition-all" onclick="' +
+    var activeCls = name === state.subTab ? ' active' : '';
+    return '<button class="subtab-btn' + activeCls + ' px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-500 active:scale-95 transition-all" onclick="' +
       ea('switchSubTab(' + ja(name) + ',this)') + '">' + ea(name) + '</button>';
   }).join('');
+  syncActiveSubTab();
 }
 
 function populateSheetSelect() {
@@ -984,6 +1008,9 @@ function loadAllData() {
         if (res.success) {
           state.allData = res.data;
           state.sheetNames = res.sheetNames || [];
+          if (state.subTab !== 'All' && state.subTab !== 'Favorite' && state.sheetNames.indexOf(state.subTab) === -1) {
+            state.subTab = 'All';
+          }
           renderSubTabs();
           populateSheetSelect();
           renderList();
@@ -1053,6 +1080,7 @@ function initPullToRefresh() {
 }
 
 window.addEventListener('DOMContentLoaded', function() {
+  updatePlaceholder();
   loadAllData();
   initPullToRefresh();
 });

@@ -9,6 +9,7 @@ const OH_TIME_HEADER = 'Update OH';
 const LOT_TIME_HEADER = 'Update Lot';
 const APP_ICON_URL = 'https://i.postimg.cc/zDFxrHNZ/image.png';
 const SYSTEM_SHEETS = ['Aging', 'Aging_Order'];
+const TEMPLATE_SHEET_NAMES = ['Oishi', 'Est', 'Alc.', 'F&N'];
 
 function doGet() {
   return HtmlService.createTemplateFromFile('index')
@@ -67,6 +68,48 @@ function getMainSheetNames_(ss) {
   return ss.getSheets()
     .map(sheet => sheet.getName())
     .filter(name => !SYSTEM_SHEETS.includes(name));
+}
+
+function getTemplateSheet_(ss) {
+  for (const name of TEMPLATE_SHEET_NAMES) {
+    const sheet = ss.getSheetByName(name);
+    if (sheet) return sheet;
+  }
+
+  return ss.getSheets().find(sheet => !SYSTEM_SHEETS.includes(sheet.getName())) || null;
+}
+
+function initializeProductSheet_(sheet, sheetName) {
+  sheet.getRange(1, 1).setValue('Stock Manager — ' + sheetName);
+  sheet.getRange(2, 1, 1, 12).setValues([[
+    'ลำดับ', 'SKU', 'ชื่อสินค้า', 'ขนาด',
+    'LOT1', 'LOT2', 'LOT3', 'LOT4',
+    OH_HEADER, OH_TIME_HEADER, LOT_TIME_HEADER, 'Favorite'
+  ]]);
+  sheet.getRange(2, 1, 1, 12).setFontWeight('bold');
+  ensureColumns_(sheet);
+}
+
+function createProductSheet_(ss, sheetName) {
+  const templateSheet = getTemplateSheet_(ss);
+  let sheet;
+
+  if (templateSheet) {
+    sheet = templateSheet.copyTo(ss).setName(sheetName);
+    sheet.getRange(1, 1).setValue('Stock Manager — ' + sheetName);
+    ensureColumns_(sheet);
+
+    const maxRows = sheet.getMaxRows();
+    const maxCols = sheet.getMaxColumns();
+    if (maxRows > 2) {
+      sheet.getRange(3, 1, maxRows - 2, maxCols).clearContent();
+    }
+    return sheet;
+  }
+
+  sheet = ss.insertSheet(sheetName);
+  initializeProductSheet_(sheet, sheetName);
+  return sheet;
 }
 
 function formatOh_(value) {
@@ -317,16 +360,13 @@ function toggleFavorite(sheetName, rowIndex, currentStatus) {
 function addProduct(sheetName, sku, name, size) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    sheetName = formatOh_(sheetName);
+    if (!sheetName) return JSON.stringify({ success: false, error: 'กรุณาระบุชื่อหมวดหมู่' });
+    if (SYSTEM_SHEETS.includes(sheetName)) return JSON.stringify({ success: false, error: `ไม่สามารถใช้ชื่อชีทระบบ: ${sheetName}` });
+
     let sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
-      sheet = ss.insertSheet(sheetName);
-      sheet.getRange(1, 1).setValue('Stock Manager — ' + sheetName);
-      sheet.getRange(2, 1, 1, 12).setValues([[
-        'ลำดับ', 'SKU', 'ชื่อสินค้า', 'ขนาด',
-        'LOT1', 'LOT2', 'LOT3', 'LOT4',
-        OH_HEADER, OH_TIME_HEADER, LOT_TIME_HEADER, 'Favorite'
-      ]]);
-      sheet.getRange(2, 1, 1, 12).setFontWeight('bold');
+      sheet = createProductSheet_(ss, sheetName);
     }
 
     const cleanSku = formatOh_(sku);
