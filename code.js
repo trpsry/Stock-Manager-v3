@@ -4,11 +4,11 @@
 // ==========================================
 
 const SPREADSHEET_ID = '1WId___CZ_OIcoJWaIjt1BG74erZrsOXzU09Js0nVPO8';
-const SHEET_NAMES = ['Oishi', 'Est', 'F&N', 'Aging'];
 const OH_HEADER = 'จำนวน OH';
 const OH_TIME_HEADER = 'Update OH';
 const LOT_TIME_HEADER = 'Update Lot';
 const APP_ICON_URL = 'https://i.postimg.cc/zDFxrHNZ/image.png';
+const SYSTEM_SHEETS = ['Aging', 'Aging_Order'];
 
 function doGet() {
   return HtmlService.createTemplateFromFile('index')
@@ -56,11 +56,17 @@ function formatUpdateDate_(value) {
 
 function ensureColumns_(sheet) {
   const maxCols = sheet.getMaxColumns();
-  if (maxCols < 11) {
-    sheet.insertColumnsAfter(maxCols, 11 - maxCols);
+  if (maxCols < 12) {
+    sheet.insertColumnsAfter(maxCols, 12 - maxCols);
   }
-  const headers = [[OH_HEADER, OH_TIME_HEADER, LOT_TIME_HEADER]];
-  sheet.getRange(2, 9, 1, 3).setValues(headers);
+  const headers = [[OH_HEADER, OH_TIME_HEADER, LOT_TIME_HEADER, 'Favorite']];
+  sheet.getRange(2, 9, 1, 4).setValues(headers);
+}
+
+function getMainSheetNames_(ss) {
+  return ss.getSheets()
+    .map(sheet => sheet.getName())
+    .filter(name => !SYSTEM_SHEETS.includes(name));
 }
 
 function formatOh_(value) {
@@ -88,24 +94,33 @@ function getAllSheetData() {
     
     const agingLastRow = agingSheet.getLastRow();
     let masterSequence = [];
+    let masterItems = [];
     
     if (agingLastRow >= 3) {
       if (isLegacy) {
         const agingBarcodesRaw = agingSheet.getRange(3, 2, agingLastRow - 2, 1).getValues();
-        masterSequence = agingBarcodesRaw.map(row => String(row[0] || '').trim()).filter(bc => bc !== '');
+        masterItems = agingBarcodesRaw
+          .map(row => ({ sku: String(row[0] || '').trim(), sheetName: '' }))
+          .filter(item => item.sku !== '');
+        masterSequence = masterItems.map(item => item.sku);
       } else {
-        const agingRaw = agingSheet.getRange(3, 1, agingLastRow - 2, 2).getValues();
+        const agingRaw = agingSheet.getRange(3, 1, agingLastRow - 2, 4).getValues();
         const sortedAging = agingRaw
           .filter(row => String(row[1] || '').trim() !== '')
-          .map(row => ({ order: Number(row[0]) || 0, sku: String(row[1]).trim() }))
+          .map(row => ({
+            order: Number(row[0]) || 0,
+            sku: String(row[1]).trim(),
+            sheetName: String(row[3] || '').trim()
+          }))
           .sort((a, b) => a.order - b.order);
-        masterSequence = sortedAging.map(item => item.sku);
+        masterItems = sortedAging.map(item => ({ sku: item.sku, sheetName: item.sheetName }));
+        masterSequence = masterItems.map(item => item.sku);
       }
     }
 
     // 2. ดึงข้อมูลจริง (Raw Data) จากทุกชีทมาเก็บไว้ใน Map
     const allRawData = {};
-    const mainSheets = ['Oishi', 'Est', 'F&N'];
+    const mainSheets = getMainSheetNames_(ss);
     
     mainSheets.forEach(name => {
       const sheet = ss.getSheetByName(name);
@@ -163,20 +178,43 @@ function getAllSheetData() {
       result[name] = result[name].concat(leftovers);
     });
 
-    // 4. สร้างคีย์ "ทั้งหมด (Aging)" ที่รวมทุกสินค้าและเรียงตามลำดับ Aging เป๊ะๆ
-    masterSequence.forEach(bc => {
-      for (const sn of mainSheets) {
-        if (allRawData[sn][bc]) {
-          const item = JSON.parse(JSON.stringify(allRawData[sn][bc])); // Clone to avoid reference issues
-          item.sheetName = sn;
-          allCombined.push(item);
-          break;
-        }
+    // 4. สร้างคีย์ "ทั้งหมด (Aging)" โดยให้ Aging_Order เป็นตัวจัดลำดับเท่านั้น
+    //    สินค้าที่อยู่ในชีตหลักแต่ยังไม่มีใน Aging_Order จะถูกต่อท้าย เพื่อไม่ให้หายจากหน้า Update
+    const addedAllKeys = new Set();
+    const pushCombinedItem = (sheetName, sku, missingFromAging) => {
+      const item = allRawData[sheetName] && allRawData[sheetName][sku];
+      if (!item) return false;
+
+      const key = `${sheetName}::${sku}`;
+      if (addedAllKeys.has(key)) return false;
+
+      const clone = JSON.parse(JSON.stringify(item)); // Clone to avoid reference issues
+      clone.sheetName = sheetName;
+      clone.missingFromAging = missingFromAging === true;
+      allCombined.push(clone);
+      addedAllKeys.add(key);
+      return true;
+    };
+
+    masterItems.forEach(ref => {
+      if (ref.sheetName && mainSheets.includes(ref.sheetName)) {
+        pushCombinedItem(ref.sheetName, ref.sku, false);
+        return;
       }
+
+      mainSheets.forEach(sn => {
+        pushCombinedItem(sn, ref.sku, false);
+      });
+    });
+
+    mainSheets.forEach(sn => {
+      Object.keys(allRawData[sn]).forEach(bc => {
+        pushCombinedItem(sn, bc, true);
+      });
     });
     result['All'] = allCombined;
 
-    return JSON.stringify({ success: true, data: result });
+    return JSON.stringify({ success: true, data: result, sheetNames: mainSheets });
   } catch (err) {
     return JSON.stringify({ success: false, error: err.message });
   }
@@ -279,8 +317,17 @@ function toggleFavorite(sheetName, rowIndex, currentStatus) {
 function addProduct(sheetName, sku, name, size) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(sheetName);
-    if (!sheet) return JSON.stringify({ success: false, error: `ไม่พบชีท: ${sheetName}` });
+    let sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      sheet.getRange(1, 1).setValue('Stock Manager — ' + sheetName);
+      sheet.getRange(2, 1, 1, 12).setValues([[
+        'ลำดับ', 'SKU', 'ชื่อสินค้า', 'ขนาด',
+        'LOT1', 'LOT2', 'LOT3', 'LOT4',
+        OH_HEADER, OH_TIME_HEADER, LOT_TIME_HEADER, 'Favorite'
+      ]]);
+      sheet.getRange(2, 1, 1, 12).setFontWeight('bold');
+    }
 
     const cleanSku = formatOh_(sku);
     const cleanName = formatOh_(name);
@@ -429,7 +476,7 @@ function migrateToAgingOrder() {
   const oldData = oldAging.getRange(3, 1, lastRow - 2, 12).getValues();
   
   // ดึงข้อมูลจากชีตหลักเพื่อหาว่าสินค้านี้มาจากชีตไหน
-  const mainSheets = ['Oishi', 'Est', 'F&N'];
+  const mainSheets = getMainSheetNames_(ss);
   const skuToSheetMap = {};
   
   mainSheets.forEach(sheetName => {

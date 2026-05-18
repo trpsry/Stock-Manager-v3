@@ -7,7 +7,8 @@ var state = {
   current: OVERVIEW_TAB, 
   subTab: 'All',
   search: '',
-  reorderMode: false
+  reorderMode: false,
+  sheetNames: []
 };
 
 // ── Search & Clear Logic ─────────────────────────────────────────
@@ -405,25 +406,25 @@ function updatePlaceholder() {
 // ── Data Management ──────────────────────────────────────────────
 
 function getCurrentProducts() {
+  var mainSheets = state.sheetNames.length ? state.sheetNames : ['Oishi', 'Est', 'F&N'];
   if (state.current === AGING_TAB) {
     if (state.subTab === 'Favorite') {
-  var outFav = [];
-  var sheets = ['Oishi', 'Est', 'F&N'];
-  for (var i = 0; i < sheets.length; i++) {
-    var rows = state.allData[sheets[i]] || [];
-    for (var j = 0; j < rows.length; j++) {
-      var p = rows[j];
-      if (!p.sheetName) p.sheetName = sheets[i];
-      if (p.fav === true) outFav.push(p);
+      var outFav = [];
+      for (var i = 0; i < mainSheets.length; i++) {
+        var rows = state.allData[mainSheets[i]] || [];
+        for (var j = 0; j < rows.length; j++) {
+          var p = rows[j];
+          if (!p.sheetName) p.sheetName = mainSheets[i];
+          if (p.fav === true) outFav.push(p);
+        }
+      }
+      return outFav;
     }
-  }
-  return outFav;
-}
     return state.allData[state.subTab] || [];
   }
-  var out = [], targetSheets = ['Oishi', 'Est', 'F&N'];
-  for (var i = 0; i < targetSheets.length; i++) {
-    var sn = targetSheets[i];
+  var out = [];
+  for (var i = 0; i < mainSheets.length; i++) {
+    var sn = mainSheets[i];
     var rows = state.allData[sn] || [];
     for (var j = 0; j < rows.length; j++) {
       var p = rows[j];
@@ -833,9 +834,12 @@ function openAddProductModal() {
   document.getElementById('add-sku').value = '';
   document.getElementById('add-name').value = '';
   document.getElementById('add-size').value = '';
-  document.getElementById('add-sheet').value = 'Oishi'; // Default
+  document.getElementById('add-new-sheet').value = '';
+  populateSheetSelect();
+  document.getElementById('add-sheet').value = state.sheetNames[0] || '__NEW__';
   document.getElementById('add-product-modal').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
+  onSheetSelectChange();
 }
 
 function closeAddProductModal(e) {
@@ -850,6 +854,11 @@ function submitAddProduct() {
   var size = document.getElementById('add-size').value.trim();
   var sheet = document.getElementById('add-sheet').value;
   var btn = document.getElementById('submit-add-btn');
+
+  if (sheet === '__NEW__') {
+    sheet = document.getElementById('add-new-sheet').value.trim();
+    if (!sheet) { showToast('กรุณากรอกชื่อหมวดหมู่ใหม่', true); return; }
+  }
 
   if (!sku) { showToast('กรุณากรอกรหัสสินค้า', true); return; }
   if (!name) { showToast('กรุณากรอกชื่อสินค้า', true); return; }
@@ -936,6 +945,32 @@ function moveProduct(u, dir) {
 
 // ── Initialize ───────────────────────────────────────────────────
 
+function renderSubTabs() {
+  var el = document.getElementById('sheet-subtabs');
+  if (!el) return;
+  el.innerHTML = (state.sheetNames || []).map(function(name) {
+    return '<button class="subtab-btn px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-500 active:scale-95 transition-all" onclick="' +
+      ea('switchSubTab(' + ja(name) + ',this)') + '">' + ea(name) + '</button>';
+  }).join('');
+}
+
+function populateSheetSelect() {
+  var sel = document.getElementById('add-sheet');
+  if (!sel) return;
+  sel.innerHTML = (state.sheetNames || []).map(function(name) {
+    return '<option value="' + ea(name) + '">' + ea(name) + '</option>';
+  }).join('') + '<option value="__NEW__">+ เพิ่มหมวดหมู่ใหม่...</option>';
+}
+
+function onSheetSelectChange() {
+  var sel = document.getElementById('add-sheet');
+  var box = document.getElementById('new-sheet-box');
+  var input = document.getElementById('add-new-sheet');
+  if (!sel || !box) return;
+  box.style.display = sel.value === '__NEW__' ? 'block' : 'none';
+  if (sel.value === '__NEW__' && input) input.focus();
+}
+
 function loadAllData() {
   showSkeletons();
   if (typeof google === 'undefined' || !google.script) {
@@ -946,7 +981,13 @@ function loadAllData() {
     .withSuccessHandler(function(raw) {
       try {
         var res = JSON.parse(raw);
-        if (res.success) { state.allData = res.data; renderList(); }
+        if (res.success) {
+          state.allData = res.data;
+          state.sheetNames = res.sheetNames || [];
+          renderSubTabs();
+          populateSheetSelect();
+          renderList();
+        }
         else showError('Error: ' + res.error);
       } catch (e) { showError('Parse Error: ' + e.message); }
     })
