@@ -101,31 +101,45 @@
   var headerTop = document.getElementById('header-top');
   var lastY = 0;
   var collapsed = false;
-  var THRESHOLD = 60; // px ที่ต้อง scroll ลงก่อน collapse
+  var ticking = false;
+  var THRESHOLD = 48;
+  var SCROLL_DOWN_TRIGGER = 12; // ต้อง scroll ลงอีกเท่าไหร่ถึง collapse
+  var SCROLL_UP_TRIGGER = 6;   // ต้อง scroll ขึ้นเท่าไหร่ถึง expand
 
-  sc.addEventListener('scroll', function() {
-    var y = sc.scrollTop;
-    var goingDown = y > lastY;
+  var accDown = 0; // สะสม scroll ลง
+  var accUp = 0;   // สะสม scroll ขึ้น
 
-    if (goingDown && y > THRESHOLD && !collapsed) {
-      // Collapse: ซ่อน header-top row
-      collapsed = true;
-      headerTop.style.maxHeight = '0';
-      headerTop.style.paddingTop = '0';
-      headerTop.style.paddingBottom = '0';
-      headerTop.style.opacity = '0';
-      headerTop.style.overflow = 'hidden';
-    } else if (!goingDown && collapsed) {
-      // Expand: แสดง header-top กลับมา
-      collapsed = false;
-      headerTop.style.maxHeight = '60px';
-      headerTop.style.paddingTop = '';
-      headerTop.style.paddingBottom = '';
-      headerTop.style.opacity = '1';
-      headerTop.style.overflow = '';
+  function update(y) {
+    var delta = y - lastY;
+
+    if (delta > 0) {
+      // Scroll ลง
+      accDown += delta;
+      accUp = 0;
+      if (!collapsed && y > THRESHOLD && accDown > SCROLL_DOWN_TRIGGER) {
+        collapsed = true;
+        headerTop.classList.add('collapsed');
+      }
+    } else if (delta < 0) {
+      // Scroll ขึ้น
+      accUp += Math.abs(delta);
+      accDown = 0;
+      if (collapsed && accUp > SCROLL_UP_TRIGGER) {
+        collapsed = false;
+        headerTop.classList.remove('collapsed');
+      }
     }
 
     lastY = y;
+    ticking = false;
+  }
+
+  sc.addEventListener('scroll', function() {
+    var y = sc.scrollTop;
+    if (!ticking) {
+      requestAnimationFrame(function() { update(y); });
+      ticking = true;
+    }
   }, { passive: true });
 })();
 </script>
