@@ -94,55 +94,5 @@
 <?!= include('modals'); ?>
 <?!= include('scripts'); ?>
 
-<!-- Collapse Header Script -->
-<script>
-(function() {
-  var sc = document.getElementById('scroll-container');
-  var headerTop = document.getElementById('header-top');
-  var lastY = 0;
-  var collapsed = false;
-  var ticking = false;
-  var THRESHOLD = 48;
-  var SCROLL_DOWN_TRIGGER = 12; // ต้อง scroll ลงอีกเท่าไหร่ถึง collapse
-  var SCROLL_UP_TRIGGER = 6;   // ต้อง scroll ขึ้นเท่าไหร่ถึง expand
-
-  var accDown = 0; // สะสม scroll ลง
-  var accUp = 0;   // สะสม scroll ขึ้น
-
-  function update(y) {
-    var delta = y - lastY;
-
-    if (delta > 0) {
-      // Scroll ลง
-      accDown += delta;
-      accUp = 0;
-      if (!collapsed && y > THRESHOLD && accDown > SCROLL_DOWN_TRIGGER) {
-        collapsed = true;
-        headerTop.classList.add('collapsed');
-      }
-    } else if (delta < 0) {
-      // Scroll ขึ้น
-      accUp += Math.abs(delta);
-      accDown = 0;
-      if (collapsed && accUp > SCROLL_UP_TRIGGER) {
-        collapsed = false;
-        headerTop.classList.remove('collapsed');
-      }
-    }
-
-    lastY = y;
-    ticking = false;
-  }
-
-  sc.addEventListener('scroll', function() {
-    var y = sc.scrollTop;
-    if (!ticking) {
-      requestAnimationFrame(function() { update(y); });
-      ticking = true;
-    }
-  }, { passive: true });
-})();
-</script>
-
 </body>
 </html>
