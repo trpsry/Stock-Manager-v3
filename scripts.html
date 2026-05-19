@@ -28,7 +28,6 @@ function clearSearch() {
 
 // ── Favorite Logic (Sheet-backed) ───────────────────────────────
 
-// Optimistic update: สลับค่า fav ใน state ทันที
 function setFavInState(sn, ri, val) {
   var keys = Object.keys(state.allData);
   for (var k = 0; k < keys.length; k++) {
@@ -41,7 +40,6 @@ function setFavInState(sn, ri, val) {
   }
 }
 
-// อัปเดต icon ดาวโดยไม่ re-render ทั้งหมด
 function patchStarIcon(u, isFav) {
   var btn = document.getElementById('starbtn_' + u);
   if (!btn) return;
@@ -58,17 +56,22 @@ function patchStarIcon(u, isFav) {
   }
 }
 
-
 function handleFavoriteClick(sn, ri, currentFav, u) {
-  // แปลง string "true"/"false" → boolean จริง (เพราะ bh() ส่งมาเป็น string)
   var isCurrent = currentFav === true || currentFav === 'true';
   var newFav = !isCurrent;
+
+  // บันทึก/ลบ timestamp ใน localStorage
+  var lsKey = 'fav_ts_' + sn + '_' + ri;
+  if (newFav) {
+    localStorage.setItem(lsKey, Date.now());
+  } else {
+    localStorage.removeItem(lsKey);
+  }
 
   // Optimistic: อัปเดต state + icon ทันที
   setFavInState(sn, ri, newFav);
   patchStarIcon(u, newFav);
 
-  // ถ้าอยู่ใน Subtab Favorite ให้ re-render หลัง delay เล็กน้อย (animation เสร็จก่อน)
   if (state.current === AGING_TAB && state.subTab === 'Favorite') {
     setTimeout(renderList, 300);
   }
@@ -77,13 +80,16 @@ function handleFavoriteClick(sn, ri, currentFav, u) {
     .withSuccessHandler(function(raw) {
       var res = JSON.parse(raw);
       if (!res.success) {
-        // Rollback ถ้า server error
+        if (newFav) localStorage.removeItem(lsKey);
+        else localStorage.setItem(lsKey, Date.now());
         setFavInState(sn, ri, isCurrent);
         patchStarIcon(u, isCurrent);
         showToast('ผิดพลาด: ' + res.error, true);
       }
     })
     .withFailureHandler(function(err) {
+      if (newFav) localStorage.removeItem(lsKey);
+      else localStorage.setItem(lsKey, Date.now());
       setFavInState(sn, ri, isCurrent);
       patchStarIcon(u, isCurrent);
       showToast('ผิดพลาด: ' + (err.message || 'Unknown'), true);
@@ -103,7 +109,6 @@ function parseDateStr(str) {
   return new Date(str).getTime() || 0;
 }
 
-// เรียงวันหมดอายุเก่าสุดไปใหม่สุด ว่างไว้ท้าย — ใช้ตอน Save เท่านั้น
 function sortLots(lots) {
   var hasVal = lots.filter(function(v) { return v !== ''; });
   var empty  = lots.filter(function(v) { return v === ''; });
@@ -166,7 +171,6 @@ function buildOverviewCard(p) {
   var bc = String(p.barcode || '');
   var hasBc = bc.length >= 8;
   
-  // Overview แสดง Lot 1-4 ตามลำดับตรงๆ (ข้อมูลใน Sheet เรียงถูกแล้วหลัง save)
   var lots = [p.lot1, p.lot2, p.lot3, p.lot4];
   var lotHtml = '';
   for (var i = 0; i < lots.length; i++) {
@@ -176,9 +180,8 @@ function buildOverviewCard(p) {
     '</div>';
   }
 
-  // ปุ่มดาว
   var isFav = p.fav === true;
-var favBtn = buildStarBtn(u, p.sheetName, p.rowIndex, isFav);
+  var favBtn = buildStarBtn(u, p.sheetName, p.rowIndex, isFav);
   var barcodeBtn = '<button onclick="'+bh('openBc',[p.name||'',bc])+'" '+(hasBc?'':'disabled')+' class="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 active:scale-90 transition-all '+(hasBc?'hover:bg-slate-50 hover:text-brand-600':'opacity-30 cursor-not-allowed')+'">' +
     '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>' +
   '</button>';
@@ -223,8 +226,6 @@ function buildCard(p) {
   var u    = uid(sn, p.rowIndex);
   var hasBc = bc.length >= 8;
   
-  // ── แสดง Lot picker ตามลำดับ 1-4 ตรงๆ (ไม่ sort ตอนแสดง) ──
-  // การ sort จะเกิดตอนกด Save เท่านั้น
   var lv = [p.lot1, p.lot2, p.lot3, p.lot4];
   var lotPickerHtml = '';
   for (var n = 1; n <= 4; n++) {
@@ -234,7 +235,6 @@ function buildCard(p) {
     '</div>';
   }
 
-  // ปุ่มดาว
   var isFav = p.fav === true;
   var favBtn = buildStarBtn(u, sn, p.rowIndex, isFav);
 
@@ -361,7 +361,6 @@ function switchTab(name, btn) {
       reorderBtn.classList.replace('text-white', 'text-slate-500');
     }
   }
-
   document.getElementById('scroll-container').scrollTop = 0;
 }
 
@@ -370,7 +369,6 @@ function switchSubTab(name, btn) {
   document.querySelectorAll('.subtab-btn').forEach(function(b) { b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   
-  // ซ่อนปุ่มจัดลำดับถ้าไม่ใช่ tab 'All'
   var reorderBtn = document.getElementById('reorder-btn');
   if (reorderBtn) {
     if (name === 'All') reorderBtn.classList.remove('hidden');
@@ -427,6 +425,12 @@ function getCurrentProducts() {
           if (p.fav === true) outFav.push(p);
         }
       }
+      // เรียงตาม localStorage timestamp — ล่าสุดขึ้นก่อน
+      outFav.sort(function(a, b) {
+        var tsA = parseInt(localStorage.getItem('fav_ts_' + a.sheetName + '_' + a.rowIndex) || '0', 10);
+        var tsB = parseInt(localStorage.getItem('fav_ts_' + b.sheetName + '_' + b.rowIndex) || '0', 10);
+        return tsB - tsA;
+      });
       return outFav;
     }
     return state.allData[state.subTab] || [];
@@ -464,28 +468,22 @@ function getFiltered() {
 
 function pad2(v) { return String(v).padStart(2, '0'); }
 function ea(v) { return String(v || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-// แก้ฟังก์ชัน ja() ให้รองรับ boolean
 function ja(v) {
-  if (typeof v === 'boolean') return String(v); // true → "true", false → "false" โดยไม่ใส่ quotes
+  if (typeof v === 'boolean') return String(v);
   return typeof v === 'number' ? String(v) : JSON.stringify(String(v == null ? '' : v));
 }
 function bh(name, args) {
   var p = args.map(ja);
   return ea(name + '(' + p.join(',') + ')');
 }
-
 function uid(sn, ri) { return String(sn || '').replace(/[^a-zA-Z0-9]/g, function(c) { return '_' + c.charCodeAt(0).toString(16); }) + '_' + ri; }
 
-// ← เพิ่ม buildStarBtn ตรงนี้ ↓
 function buildStarBtn(u, sn, ri, isFav) {
   var borderCls = isFav ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white';
   var onclick = bh('handleFavoriteClick', [sn, ri, isFav ? true : false, u]);
-  
-  // ไอคอน Bookmark แทนดาว — ทันสมัยกว่า
   var svgContent = isFav
     ? '<path d="M5 3h14a1 1 0 0 1 1 1v17l-7-3.5L6 21V4a1 1 0 0 1 1-1z" fill="#f59e0b" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
     : '<path d="M5 3h14a1 1 0 0 1 1 1v17l-7-3.5L6 21V4a1 1 0 0 1 1-1z" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
-
   return '<button id="starbtn_'+u+'" onclick="'+onclick+'" ' +
     'class="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-2xl border '+borderCls+' transition-all duration-200 active:scale-90" ' +
     'aria-label="Favorite">' +
@@ -697,18 +695,13 @@ function saveProduct(sn, ri, u) {
 
 function saveLot(sn, ri, u) {
   var btn = document.getElementById('savebtn_' + u);
-
-  // อ่านค่าจาก picker ทั้ง 4 ช่องตามลำดับ 1-4
   var lots = [];
   for (var i = 1; i <= 4; i++) {
     var v = readLot(u, i);
     if (v === null) { showToast('Lot '+i+' ไม่ถูกต้อง', true); return; }
     lots.push(v);
   }
-
-  // ── เรียงวันก่อน Save: เก่าสุด → ใหม่สุด, ว่างไว้ท้าย ──
   lots = sortLots(lots);
-  // ──────────────────────────────────────────────────────────
 
   var r = getRow(sn, ri);
   var prevLots = r ? [r.lot1, r.lot2, r.lot3, r.lot4] : ['', '', '', ''];
@@ -724,7 +717,7 @@ function saveLot(sn, ri, u) {
         updLots(sn, ri, lots, res.lotTime);
         patchLotTime(u, res.lotTime);
         showToast('บันทึก Lot สำเร็จ ✓');
-        renderList(); // re-render เพื่อให้ picker แสดงลำดับใหม่ที่เรียงแล้ว
+        renderList();
       } else {
         updLots(sn, ri, prevLots, prevTime);
         showToast('ผิดพลาด: ' + res.error, true);
@@ -894,7 +887,7 @@ function submitAddProduct() {
             subContainer.classList.add('flex');
           }
         }
-        loadAllData(); // Reload ข้อมูลใหม่หมดเพื่อดึงลำดับที่ถูกต้อง
+        loadAllData();
       } else {
         showToast('ผิดพลาด: ' + res.error, true);
       }
@@ -927,7 +920,6 @@ function moveProduct(u, dir) {
   for (var i = 0; i < allItems.length; i++) {
     if (uid(allItems[i].sheetName, allItems[i].rowIndex) === u) { idx = i; break; }
   }
-  
   if (idx === -1) return;
   var targetIdx = idx + dir;
   if (targetIdx < 0 || targetIdx >= allItems.length) return;
@@ -937,7 +929,6 @@ function moveProduct(u, dir) {
   var skuA = itemA.barcode;
   var skuB = itemB.barcode;
 
-  // Optimistic Swap
   allItems[idx] = itemB;
   allItems[targetIdx] = itemA;
   renderList();
@@ -946,7 +937,6 @@ function moveProduct(u, dir) {
     .withSuccessHandler(function(raw) {
       var res = JSON.parse(raw);
       if (!res.success) {
-        // Rollback
         var temp = allItems[idx];
         allItems[idx] = allItems[targetIdx];
         allItems[targetIdx] = temp;
@@ -955,7 +945,6 @@ function moveProduct(u, dir) {
       }
     })
     .withFailureHandler(function(err) {
-      // Rollback
       var temp = allItems[idx];
       allItems[idx] = allItems[targetIdx];
       allItems[targetIdx] = temp;
