@@ -55,18 +55,9 @@ function patchStarIcon(u, isFav) {
     btn.className = btn.className.replace('border-amber-200 bg-amber-50', 'border-slate-200 bg-white');
   }
 }
-
 function handleFavoriteClick(sn, ri, currentFav, u) {
   var isCurrent = currentFav === true || currentFav === 'true';
   var newFav = !isCurrent;
-
-  // บันทึก/ลบ timestamp ใน localStorage
-  var lsKey = 'fav_ts_' + sn + '_' + ri;
-  if (newFav) {
-    localStorage.setItem(lsKey, Date.now());
-  } else {
-    localStorage.removeItem(lsKey);
-  }
 
   // Optimistic: อัปเดต state + icon ทันที
   setFavInState(sn, ri, newFav);
@@ -79,17 +70,27 @@ function handleFavoriteClick(sn, ri, currentFav, u) {
   google.script.run
     .withSuccessHandler(function(raw) {
       var res = JSON.parse(raw);
-      if (!res.success) {
-        if (newFav) localStorage.removeItem(lsKey);
-        else localStorage.setItem(lsKey, Date.now());
+      if (res.success) {
+        // อัปเดต favTime ใน state ด้วย timestamp จาก server
+        if (res.favTime) {
+          var keys = Object.keys(state.allData);
+          for (var k = 0; k < keys.length; k++) {
+            var rows = state.allData[keys[k]] || [];
+            for (var j = 0; j < rows.length; j++) {
+              if (rows[j].rowIndex === ri && rows[j].sheetName === sn) {
+                rows[j].favTime = res.favTime;
+              }
+            }
+          }
+        }
+      } else {
+        // Rollback
         setFavInState(sn, ri, isCurrent);
         patchStarIcon(u, isCurrent);
         showToast('ผิดพลาด: ' + res.error, true);
       }
     })
     .withFailureHandler(function(err) {
-      if (newFav) localStorage.removeItem(lsKey);
-      else localStorage.setItem(lsKey, Date.now());
       setFavInState(sn, ri, isCurrent);
       patchStarIcon(u, isCurrent);
       showToast('ผิดพลาด: ' + (err.message || 'Unknown'), true);
@@ -425,11 +426,9 @@ function getCurrentProducts() {
           if (p.fav === true) outFav.push(p);
         }
       }
-      // เรียงตาม localStorage timestamp — ล่าสุดขึ้นก่อน
+      // เรียงตาม favTime จาก database — ล่าสุดขึ้นก่อน
       outFav.sort(function(a, b) {
-        var tsA = parseInt(localStorage.getItem('fav_ts_' + a.sheetName + '_' + a.rowIndex) || '0', 10);
-        var tsB = parseInt(localStorage.getItem('fav_ts_' + b.sheetName + '_' + b.rowIndex) || '0', 10);
-        return tsB - tsA;
+        return (b.favTime || 0) - (a.favTime || 0);
       });
       return outFav;
     }
