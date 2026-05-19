@@ -172,29 +172,31 @@ function getAllSheetData() {
         ensureColumns_(sheet);
         const lastRow = sheet.getLastRow();
         if (lastRow >= 3) {
-          const vals = sheet.getRange(3, 1, lastRow - 2, 12).getValues();
-          vals.forEach((row, idx) => {
-            const bc = String(row[1] || '').trim();
-            if (bc) {
-              allRawData[name][bc] = {
-                rowIndex: idx + 3,
-                barcode: bc,
-                name: String(row[2] || '').trim(),
-                size: String(row[3] || '').trim(),
-                lot1: formatLotDate_(row[4]),
-                lot2: formatLotDate_(row[5]),
-                lot3: formatLotDate_(row[6]),
-                lot4: formatLotDate_(row[7]),
-                oh: formatOh_(row[8]),
-                ohTime: formatUpdateDate_(row[9]),
-                lotTime: formatUpdateDate_(row[10]),
-                fav: row[11] === true || String(row[11]).toUpperCase() === 'TRUE'
-              };
-            }
-          });
-        }
-      }
-    });
+          // ใหม่ — ดึง 13 คอลัมน์ และเพิ่ม favTime
+const vals = sheet.getRange(3, 1, lastRow - 2, 13).getValues();
+vals.forEach((row, idx) => {
+  const bc = String(row[1] || '').trim();
+  if (bc) {
+    const favTime = row[12] instanceof Date && !isNaN(row[12].getTime())
+      ? row[12].getTime()
+      : 0;
+    allRawData[name][bc] = {
+      rowIndex: idx + 3,
+      barcode: bc,
+      name: String(row[2] || '').trim(),
+      size: String(row[3] || '').trim(),
+      lot1: formatLotDate_(row[4]),
+      lot2: formatLotDate_(row[5]),
+      lot3: formatLotDate_(row[6]),
+      lot4: formatLotDate_(row[7]),
+      oh: formatOh_(row[8]),
+      ohTime: formatUpdateDate_(row[9]),
+      lotTime: formatUpdateDate_(row[10]),
+      fav: row[11] === true || String(row[11]).toUpperCase() === 'TRUE',
+      favTime: favTime
+    };
+  }
+});
 
     // 3. จัดกลุ่มข้อมูลลงในแต่ละชีท โดยเรียงลำดับตามชีท Aging (Master Sequence)
     const allCombined = [];
@@ -340,17 +342,32 @@ function clearLotData(sheetName, rowIndex) {
   }
 }
 
-// ── Toggle Favorite (คอลัมน์ L = 12) ───────────────────────────
+// ── Toggle Favorite (คอลัมน์ L = 12, favTime คอลัมน์ M = 13) ───────────────────────────
 function toggleFavorite(sheetName, rowIndex, currentStatus) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) return JSON.stringify({ success: false, error: `ไม่พบชีท: ${sheetName}` });
 
+    // เพิ่ม column M ถ้ายังไม่มี
+    if (sheet.getMaxColumns() < 13) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), 13 - sheet.getMaxColumns());
+    }
+
     const newStatus = !currentStatus;
+    const now = new Date();
     sheet.getRange(rowIndex, 12).setValue(newStatus);
 
-    return JSON.stringify({ success: true, fav: newStatus });
+    // บันทึก timestamp ตอนกด fav เท่านั้น (ไม่ล้างตอน unfav เพื่อให้ยังเรียงได้)
+    if (newStatus) {
+      sheet.getRange(rowIndex, 13).setValue(now);
+    }
+
+    return JSON.stringify({
+      success: true,
+      fav: newStatus,
+      favTime: newStatus ? now.getTime() : null
+    });
   } catch (err) {
     return JSON.stringify({ success: false, error: err.message });
   }
